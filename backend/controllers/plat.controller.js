@@ -37,24 +37,35 @@ exports.getAllPlats = async (req, res) => {
 
 exports.updatePlat = async (req, res) => {
   try {
-    const updateData = {
-      nom: req.body.nom,
-      calories: req.body.calories,
-      typePlat: req.body.typePlat,
-      ingredients: req.body.ingredients
+    const updateData = {};
+    
+    if (req.body.nom) updateData.nom = req.body.nom;
+    if (req.body.calories) updateData.calories = Number(req.body.calories);
+    if (req.body.typePlat) updateData.typePlat = req.body.typePlat;
+    if (req.body.typeAlimentaire) updateData.typeAlimentaire = req.body.typeAlimentaire;
+    
+    if (req.body.ingredients !== undefined) {
+      updateData.ingredients = req.body.ingredients
         ? req.body.ingredients.split(",").map(i => i.trim())
-        : [],
-      allergenes: req.body.allergenes
+        : [];
+    }
+    
+    if (req.body.allergenes !== undefined) {
+      updateData.allergenes = req.body.allergenes
         ? req.body.allergenes.split(",").map(a => a.trim())
-        : [],
-      typeAlimentaire: req.body.typeAlimentaire || "equilibre" // ✅ juste string
-    };
+        : [];
+    }
 
     if (req.file) updateData.photo = req.file.path; // Cloudinary URL
 
     const plat = await Plat.findByIdAndUpdate(req.params.id, updateData, {
       new: true
     });
+    
+    if (!plat) {
+      return res.status(404).json({ message: "Plat introuvable" });
+    }
+    
     res.json(plat);
   } catch (err) {
     console.error(err);
