@@ -18,8 +18,6 @@ app.use(cors());
 const stripeRoutes = require("./routes/stripe.routes");
 app.use("/api/stripe", stripeRoutes);
 app.use(express.json());
-// Rend les images uploadees accessibles depuis le frontend.
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const platRoutes = require("./routes/plat.routes");
 const menuRoutes = require("./routes/menu.routes");

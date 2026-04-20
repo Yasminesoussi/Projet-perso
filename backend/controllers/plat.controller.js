@@ -6,7 +6,7 @@ exports.createPlat = async (req, res) => {
     console.log("REQ.FILE:", req.file); // debug pour vérifier multer
     const plat = new Plat({
       nom: req.body.nom,
-      photo: req.file ? `/uploads/${req.file.filename}` : null,
+      photo: req.file ? req.file.path : null, // Cloudinary URL
       ingredients: req.body.ingredients
         ? req.body.ingredients.split(",").map(i => i.trim())
         : [],
@@ -50,7 +50,7 @@ exports.updatePlat = async (req, res) => {
       typeAlimentaire: req.body.typeAlimentaire || "equilibre" // ✅ juste string
     };
 
-    if (req.file) updateData.photo = `/uploads/${req.file.filename}`;
+    if (req.file) updateData.photo = req.file.path; // Cloudinary URL
 
     const plat = await Plat.findByIdAndUpdate(req.params.id, updateData, {
       new: true
