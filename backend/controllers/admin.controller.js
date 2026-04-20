@@ -120,10 +120,11 @@ exports.consumeByQR = async (req, res) => {
     }
 
     // Le scan n'est accepte que dans une fenetre de temps raisonnable.
+    // On autorise jusqu'à 2h avant pour gérer le décalage horaire du serveur (UTC)
     const { start } = parseStartEnd(reservation.dateISO, reservation.creneau);
     if (start) {
       const now = new Date();
-      const graceStart = new Date(start.getTime() - 15 * 60 * 1000);
+      const graceStart = new Date(start.getTime() - 120 * 60 * 1000);
       if (now < graceStart) {
         return res.status(400).json({ message: "Trop tôt pour scanner" });
       }

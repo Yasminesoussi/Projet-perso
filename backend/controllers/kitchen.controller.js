@@ -87,11 +87,12 @@ exports.scanArrival = async (req, res) => {
     if (reservation.status === "CANCELLED") return res.status(400).json({ message: "Réservation annulée" });
     if (reservation.status === "CONSUMED") return res.status(400).json({ message: "Réservation déjà servie" });
 
-    // Vérification : on refuse seulement si scan plus de 15 min avant le créneau
+    // Vérification : on autorise le scan jusqu'à 2h avant pour gérer les décalages horaires (UTC)
     const { start } = parseStartEnd(reservation.dateISO, reservation.creneau);
     if (start) {
       const now = new Date();
-      const graceStart = new Date(start.getTime() - 15 * 60 * 1000);
+      // On élargit à 120 minutes (2h) pour compenser le décalage du serveur Render (UTC)
+      const graceStart = new Date(start.getTime() - 120 * 60 * 1000); 
       if (now < graceStart) {
         return res.status(400).json({ message: "Trop tôt pour scanner" });
       }
