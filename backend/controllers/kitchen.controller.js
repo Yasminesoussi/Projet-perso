@@ -87,18 +87,13 @@ exports.scanArrival = async (req, res) => {
     if (reservation.status === "CANCELLED") return res.status(400).json({ message: "Réservation annulée" });
     if (reservation.status === "CONSUMED") return res.status(400).json({ message: "Réservation déjà servie" });
 
-    // Vérification de la fenêtre horaire
-    const { start, end } = parseStartEnd(reservation.dateISO, reservation.creneau);
-    if (start && end) {
+    // Vérification : on refuse seulement si scan plus de 15 min avant le créneau
+    const { start } = parseStartEnd(reservation.dateISO, reservation.creneau);
+    if (start) {
       const now = new Date();
       const graceStart = new Date(start.getTime() - 15 * 60 * 1000);
-      const graceEnd = new Date(end.getTime() + 30 * 60 * 1000);
-      
       if (now < graceStart) {
         return res.status(400).json({ message: "Trop tôt pour scanner" });
-      }
-      if (now > graceEnd) {
-        return res.status(400).json({ message: "Réservation expirée" });
       }
     }
 

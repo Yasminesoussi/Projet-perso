@@ -120,16 +120,12 @@ exports.consumeByQR = async (req, res) => {
     }
 
     // Le scan n'est accepte que dans une fenetre de temps raisonnable.
-    const { start, end } = parseStartEnd(reservation.dateISO, reservation.creneau);
-    const now = new Date();
-    if (start && end) {
+    const { start } = parseStartEnd(reservation.dateISO, reservation.creneau);
+    if (start) {
+      const now = new Date();
       const graceStart = new Date(start.getTime() - 15 * 60 * 1000);
-      const graceEnd = new Date(end.getTime() + 30 * 60 * 1000);
       if (now < graceStart) {
         return res.status(400).json({ message: "Trop tôt pour scanner" });
-      }
-      if (now > graceEnd) {
-        return res.status(400).json({ message: "Réservation expirée" });
       }
     }
 
