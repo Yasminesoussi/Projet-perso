@@ -8,6 +8,11 @@ class PlatService {
         return Array.isArray(data) ? data : [];
     }
 
+    async getPlatById(id) {
+        if (!id) throw new Error('Identifiant plat requis');
+        return await PlatRepository.getPlatById(id);
+    }
+
     async deletePlat(id) {
         if (!id) throw new Error('Identifiant plat requis');
         return await PlatRepository.deletePlat(id);

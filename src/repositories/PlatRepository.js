@@ -13,6 +13,16 @@ class PlatRepository {
         }
     }
 
+    async getPlatById(id) {
+        try {
+            const response = await apiClient.get(`/plats/${id}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching plat by id:', error);
+            throw error;
+        }
+    }
+
     async deletePlat(id) {
         try {
             const response = await apiClient.delete(`/plats/${id}`);

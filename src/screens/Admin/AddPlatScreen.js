@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Image
+  Image,
+  Platform,
+  Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
@@ -28,7 +30,7 @@ export default function AddPlatScreen({ navigation }) {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      alert("Permission refusée pour accéder aux photos !");
+      Alert.alert("Permission", "Permission refusée pour accéder aux photos !");
       return;
     }
 
@@ -56,18 +58,30 @@ export default function AddPlatScreen({ navigation }) {
       formData.append("allergenes", allergenes);
 
       if (image) {
-        const response = await fetch(image);
-        const blob = await response.blob();
-        const filename = image.split("/").pop();
-        formData.append("photo", blob, filename);
+        if (Platform.OS === 'web') {
+          // Expo Web
+          const response = await fetch(image);
+          const blob = await response.blob();
+          formData.append("photo", blob, "photo.jpg");
+        } else {
+          // Mobile (Android/iOS)
+          const filename = image.split("/").pop();
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : `image`;
+          formData.append("photo", {
+            uri: image,
+            name: filename,
+            type: type,
+          });
+        }
       }
 
       await PlatService.createPlat(formData);
-      alert("Plat ajouté avec succès !");
+      Alert.alert("Succès", "Plat ajouté avec succès !");
       navigation.goBack();
     } catch (error) {
       console.error(error);
-      alert("Erreur lors de l'ajout du plat");
+      Alert.alert("Erreur", "Erreur lors de l'ajout du plat");
     }
   };
 

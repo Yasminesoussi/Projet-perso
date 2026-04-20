@@ -1,8 +1,9 @@
-import React, { useMemo } from "react";
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useMemo, useState, useEffect } from "react";
+import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "../../constants/Colors";
-import { getServerUrl } from "../../utils/image";
+import { getImageUri } from "../../utils/image";
+import PlatService from "../../services/PlatService";
 
 function getStudentName(review) {
   const firstName = review?.student?.firstName || review?.author?.firstName || "";
@@ -20,14 +21,35 @@ function getReviewDate(review) {
 }
 
 export default function PlatDetailAdminScreen({ route }) {
-  const base = getServerUrl();
-  const { plat, reviews = [] } = route.params || {};
+  const { plat: initialPlat } = route.params || {};
+  const [plat, setPlat] = useState(initialPlat);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const imageUri = useMemo(() => {
-    if (!plat?.photo) return null;
-    if (String(plat.photo).startsWith("http")) return plat.photo;
-    return `${base}${String(plat.photo).replace(/\\/g, "/")}`;
-  }, [plat, base]);
+  useEffect(() => {
+    const loadDetails = async () => {
+      try {
+        const data = await PlatService.getPlatById(initialPlat._id);
+        setPlat(data.plat);
+        setReviews(data.reviews);
+      } catch (err) {
+        console.error("Erreur lors de la récupération des avis:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDetails();
+  }, [initialPlat._id]);
+
+  const imageUri = useMemo(() => getImageUri(plat?.photo), [plat?.photo]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -140,4 +162,5 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   emptyText: { color: Colors.text, opacity: 0.7 },
+  center: { justifyContent: "center", alignItems: "center" },
 });

@@ -44,7 +44,8 @@
     "extra": {
       "eas": {
         "projectId": "8ce50ec4-63d6-47a0-a66f-b2edb2e89760"
-      }
+      },
+      "stripePublishableKey": "pk_test_51TNzt5CNHmyuFmZ3taRNFvUrBfpF6matF4IcWzQHtSc5S0H2ODlTkiC4MAALTmR8dmTVzQKeG3c8GlTkizlBD4fM001YRpc31E"
     }
   }
 }

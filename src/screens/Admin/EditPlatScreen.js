@@ -8,14 +8,15 @@ import {
   StyleSheet,
   ScrollView,
   Image,
-  Alert
+  Alert,
+  Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import PlatService from "../../services/PlatService";
-import { SERVER_URL } from "../../constants/Config";
+import { getImageUri } from "../../utils/image";
 
 export default function EditPlatScreen({ route, navigation }) {
   const { plat } = route.params;
@@ -28,7 +29,7 @@ export default function EditPlatScreen({ route, navigation }) {
   const [calories, setCalories] = useState(String(plat.calories || ""));
   const [ingredients, setIngredients] = useState((plat.ingredients || []).join(", "));
   const [allergenes, setAllergenes] = useState((plat.allergenes || []).join(", "));
-  const [image, setImage] = useState(plat.photo ? `${SERVER_URL}${plat.photo}` : null);
+  const [image, setImage] = useState(getImageUri(plat.photo));
   const [imageFile, setImageFile] = useState(null);
 
   // 🔹 Choisir une image
@@ -64,15 +65,24 @@ export default function EditPlatScreen({ route, navigation }) {
       formData.append("allergenes", allergenes);
 
       if (imageFile) {
-        const filename = imageFile.uri.split("/").pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image`;
-        formData.append("photo", { uri: imageFile.uri, name: filename, type });
+        if (Platform.OS === 'web') {
+          // Expo Web : imageFile contient un blob ou on peut le fetcher
+          const response = await fetch(imageFile.uri);
+          const blob = await response.blob();
+          formData.append("photo", blob, imageFile.name || "photo.jpg");
+        } else {
+          // Mobile (Android/iOS)
+          const filename = imageFile.uri.split("/").pop();
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : `image`;
+          formData.append("photo", { uri: imageFile.uri, name: filename, type });
+        }
       }
 
       const response = await PlatService.updatePlat(plat._id, formData);
-
-      if (response.status === 200) {
+      
+      // Axios renvoie la data directement, on vérifie si l'id existe
+      if (response && response._id) {
         Alert.alert("Succès", "Plat modifié avec succès !");
         navigation.goBack();
       }

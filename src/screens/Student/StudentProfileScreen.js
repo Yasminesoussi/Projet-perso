@@ -21,10 +21,7 @@ function formatFullName(student) {
 
 function getStudentCardUri(student) {
   if (!student?.cardImage) return null;
-  if (String(student.cardImage).startsWith("/uploads/")) {
-    return getImageUri(student.cardImage);
-  }
-  return getImageUri(`/uploads/${student.cardImage}`);
+  return getImageUri(student.cardImage);
 }
 
 function InfoCard({ icon, label, value }) {

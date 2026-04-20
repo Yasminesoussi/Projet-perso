@@ -131,10 +131,7 @@ export default function StudentSignupScreen() {
       if (Platform.OS === "web") {
         const res = await fetch(cardImage.uri);
         const blob = await res.blob();
-        const file = new File([blob], "carte.jpg", {
-          type: blob.type || "image/jpeg",
-        });
-        formData.append("card", file);
+        formData.append("card", blob, "carte.jpg");
       } else {
         formData.append("card", {
           uri: cardImage.uri,

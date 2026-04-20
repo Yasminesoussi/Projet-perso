@@ -16,7 +16,7 @@ import PlatService from "../../services/PlatService";
 import BottomTabs from "../../navigation/BottomTabs";
 import PlanningScreen from "./PlanningScreen"; // Same folder now
 
-import { getServerUrl } from "../../utils/image";
+import { getImageUri } from "../../utils/image";
 
 export default function PlatListScreen({ navigation, route }) {
   const [plats, setPlats] = useState([]);
@@ -47,8 +47,7 @@ export default function PlatListScreen({ navigation, route }) {
   );
 
   const renderItem = ({ item }) => {
-    const base = getServerUrl();
-    const imageUri = item.photo ? `${base}${String(item.photo).replace(/\\/g, "/")}` : null;
+    const imageUri = getImageUri(item.photo);
 
     return (
       <TouchableOpacity
