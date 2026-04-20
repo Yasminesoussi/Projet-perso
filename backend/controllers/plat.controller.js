@@ -1,4 +1,5 @@
 const Plat = require("../models/Plat");
+const Review = require("../models/Review");
 
 
 exports.createPlat = async (req, res) => {
@@ -30,6 +31,24 @@ exports.getAllPlats = async (req, res) => {
   try {
     const plats = await Plat.find();
     res.json(plats);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.getPlatById = async (req, res) => {
+  try {
+    const plat = await Plat.findById(req.params.id);
+    if (!plat) {
+      return res.status(404).json({ message: "Plat introuvable" });
+    }
+    
+    // Récupérer les avis associés à ce plat
+    const reviews = await Review.find({ plat: req.params.id })
+      .populate("student", "firstName lastName fullName")
+      .sort({ createdAt: -1 });
+      
+    res.json({ plat, reviews });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

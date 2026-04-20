@@ -6,6 +6,7 @@ const upload = require("../middlewares/upload");
 
 router.post("/",  upload.single("photo"), platController.createPlat);
 router.get("/",  platController.getAllPlats);
+router.get("/:id", platController.getPlatById);
 router.put("/:id", upload.single("photo"), platController.updatePlat);
 router.delete("/:id", platController.deletePlat);
 
