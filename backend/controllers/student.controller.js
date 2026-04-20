@@ -380,8 +380,8 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ message: "Carte Ã©tudiant obligatoire" });
     }
 
-    // RÃ©cupÃ©rer image uploadÃ©e
-    const cardImage = req.files.card[0].filename;
+    // RÃ©cupÃ©rer image uploadÃ©e (Cloudinary utilise .path)
+    const cardImage = req.files.card[0].path;
 
     // Selfie non utilisÃ© pour le moment
     const selfieImage = undefined;
