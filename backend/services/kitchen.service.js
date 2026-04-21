@@ -116,7 +116,10 @@ async function getNextLotNumber({ dateISO, repas, creneau }) {
 
 // Logique principale pour grouper les commandes en attente dans un nouveau lot de préparation (batch)
 async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_MEALS }) {
+  // 1. Normalisation de la taille maximale du lot (max 5 repas par défaut)
   const normalizedMaxMeals = Math.max(1, Math.min(Number(maxMeals) || MAX_BATCH_MEALS, MAX_BATCH_MEALS));
+  
+  // 2. Vérification : On ne peut pas lancer deux lots en même temps pour le même créneau
   const activeBatch = await KitchenBatch.findOne({ dateISO, repas, creneau, status: "EN_PREPARATION" });
   if (activeBatch) {
     const error = new Error("Un lot est déjà en préparation pour ce créneau");
@@ -124,6 +127,7 @@ async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_M
     throw error;
   }
 
+  // 3. Vérification : Le lot précédent doit être terminé (PRET ou SERVI) avant d'en lancer un nouveau
   const lastBatch = await KitchenBatch.findOne({ dateISO, repas, creneau }).sort({ lotNumber: -1 });
   if (lastBatch && lastBatch.status !== "PRET" && lastBatch.status !== "SERVED") {
     const error = new Error("Le lot précédent doit être PRET avant de lancer le suivant");
@@ -131,6 +135,7 @@ async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_M
     throw error;
   }
 
+  // 4. Récupération des commandes en attente (triées par ordre d'arrivée du scan)
   const waitingOrders = await KitchenOrder.find({
     dateISO,
     repas,
@@ -149,6 +154,7 @@ async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_M
   const selectedItems = [];
   let mealCount = 0;
 
+  // 5. Sélection des commandes qui peuvent entrer dans le lot selon la capacité restante
   for (const order of waitingOrders) {
     if (normalizeKitchenOrderCounters(order)) await order.save();
 
@@ -177,6 +183,7 @@ async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_M
       internalOrderIds: takenInternalIds,
     });
 
+    // Mise à jour de la commande : elle passe d' "EN ATTENTE" à "EN PREPARATION"
     order.pendingQuantity = Math.max(0, (order.pendingQuantity || 0) - quantityToTake);
     order.preparingQuantity = (order.preparingQuantity || 0) + quantityToTake;
     if (!order.preparingAt) order.preparingAt = new Date();
@@ -192,6 +199,7 @@ async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_M
     throw error;
   }
 
+  // 6. Création officielle du lot (Batch) dans la base de données
   const lotNumber = await getNextLotNumber({ dateISO, repas, creneau });
   const batch = await KitchenBatch.create({
     dateISO,

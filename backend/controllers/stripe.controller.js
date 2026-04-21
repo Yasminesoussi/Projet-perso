@@ -226,7 +226,8 @@ exports.createPackPaymentIntent = async (req, res) => {
     const purchase = await ensurePurchaseFromIntent(paymentIntent);
 
     res.json({
-      paymentIntentClientSecret: paymentIntent.client_secret,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
       ephemeralKey: null,
       customer: student.stripeCustomerId || null,
       publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
