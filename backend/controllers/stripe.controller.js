@@ -263,6 +263,47 @@ exports.finalizePackPaymentIntent = async (req, res) => {
   }
 };
 
+// 🔹 Traite les notifications asynchrones envoyées par Stripe (Webhooks)
+exports.handleWebhook = async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  const stripe = getStripeClient();
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+
+  try {
+    if (webhookSecret) {
+      // Verification de la signature si le secret est configure
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } else {
+      // Mode degrade sans verification (uniquement pour le dev local sans webhook secret)
+      event = JSON.parse(req.body);
+    }
+  } catch (err) {
+    console.error(`Webhook Error: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  const data = event.data.object;
+  const eventType = event.type;
+
+  try {
+    // On ne traite que les evenements lies aux PaymentIntents (intentions de paiement)
+    if (eventType.startsWith("payment_intent.")) {
+      const purchase = await ensurePurchaseFromIntent(data);
+      if (purchase) {
+        await syncPurchaseFromIntent(purchase, data);
+        console.log(`Webhook: Achat ${purchase._id} mis a jour (${eventType})`);
+      }
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error("Webhook Processing Error:", error);
+    res.status(500).json({ message: "Erreur lors du traitement du webhook" });
+  }
+};
+
 // 🔹 Liste tous les achats de packs effectués par l'étudiant connecté
 exports.listMyPackPurchases = async (req, res) => {
   try {

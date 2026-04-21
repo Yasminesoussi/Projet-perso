@@ -3,7 +3,7 @@ const router = express.Router();
 const reviewController = require("../controllers/review.controller");
 const studentAuth = require("../middleware/studentAuth");
 
-router.get("/plats/:id", reviewController.listByPlat);
-router.post("/plats/:id", studentAuth, reviewController.createForPlat);
+router.get("/plats/:id", reviewController.getReviewsByPlat);
+router.post("/", studentAuth, reviewController.createReview);
 
 module.exports = router;
