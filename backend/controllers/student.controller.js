@@ -225,7 +225,21 @@ exports.approveStudent = async (req, res) => {
     await student.save();
     try {
       await sendStudentStatusEmail(student.email, "ACCEPTED");
-    } catch (e) {}
+      // 🔔 Création d'une notification pour l'étudiant
+      await StudentNotification.create({
+        student: student._id,
+        key: `account_accepted_${student._id}`,
+        type: "menu",
+        title: "Compte validé ! 🎉",
+        body: "Votre compte a été accepté par l'administrateur. Vous pouvez maintenant réserver vos repas.",
+        icon: "checkmark-circle-outline",
+        bg: "#D4EDDA",
+        tint: "#155724",
+        actionRoute: "StudentHome",
+      });
+    } catch (e) {
+      console.error("Erreur notification acceptation :", e.message);
+    }
     res.json({ message: "Étudiant accepté" });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error });

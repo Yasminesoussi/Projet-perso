@@ -10,6 +10,7 @@ const Passage = require("../models/Passage");
 const Student = require("../models/Student");
 const KitchenOrder = require("../models/KitchenOrder");
 const KitchenBatch = require("../models/KitchenBatch");
+const StudentNotification = require("../models/StudentNotification");
 const MAX_BATCH_MEALS = 5;
 
 // Génère des identifiants internes pour chaque repas d'une réservation (ex: #ABCDEF-1, #ABCDEF-2)
@@ -105,6 +106,23 @@ async function ensureKitchenOrderFromReservation(reservation) {
     source: "QR",
   });
 
+  // 🔔 Notification : Arrivée enregistrée
+  try {
+    await StudentNotification.create({
+      student: order.student,
+      key: `order_pending_${order._id}`,
+      type: "order",
+      title: "Arrivée confirmée 🎫",
+      body: "Votre arrivée a été scannée. Votre commande est maintenant en attente en cuisine.",
+      icon: "time-outline",
+      bg: "#FFF3CD",
+      tint: "#856404",
+      actionRoute: "StudentOrders",
+    });
+  } catch (e) {
+    console.error("Erreur notification pending :", e.message);
+  }
+
   return order;
 }
 
@@ -190,6 +208,23 @@ async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_M
     syncKitchenOrderStatus(order);
     await order.save();
 
+    // 🔔 Notification : En préparation
+    try {
+      await StudentNotification.create({
+        student: order.student,
+        key: `order_preparing_${order._id}`,
+        type: "order",
+        title: "C'est parti ! 👨‍🍳",
+        body: "Votre repas est entré en préparation dans les cuisines.",
+        icon: "flame-outline",
+        bg: "#CFE2FF",
+        tint: "#084298",
+        actionRoute: "StudentOrders",
+      });
+    } catch (e) {
+      console.error("Erreur notification preparing :", e.message);
+    }
+
     mealCount += quantityToTake;
   }
 
@@ -246,6 +281,23 @@ async function markBatchReady(batchId) {
     order.readyAt = readyAt;
     syncKitchenOrderStatus(order);
     await order.save();
+
+    // 🔔 Notification pour l'étudiant : son plat est prêt !
+    try {
+      await StudentNotification.create({
+        student: order.student,
+        key: `order_ready_${order._id}`,
+        type: "order",
+        title: "Repas prêt ! 🍽️",
+        body: `Votre repas pour le ${batch.repas} (${batch.creneau}) est prêt au comptoir.`,
+        icon: "restaurant-outline",
+        bg: "#E8F4FD",
+        tint: "#007BFF",
+        actionRoute: "StudentOrders",
+      });
+    } catch (e) {
+      console.error("Erreur notification repas pret :", e.message);
+    }
   }
 
   return KitchenBatch.findById(batch._id)
@@ -282,6 +334,23 @@ async function markBatchServed(batchId, adminId = null) {
     order.servedAt = now;
     syncKitchenOrderStatus(order);
     await order.save();
+
+    // 🔔 Notification : Bon appétit !
+    try {
+      await StudentNotification.create({
+        student: order.student,
+        key: `order_served_${order._id}`,
+        type: "order",
+        title: "Bon appétit ! 😋",
+        body: "Votre repas vous a été servi. Profitez bien de votre repas !",
+        icon: "heart-outline",
+        bg: "#D1E7DD",
+        tint: "#0F5132",
+        actionRoute: "StudentOrders",
+      });
+    } catch (e) {
+      console.error("Erreur notification served :", e.message);
+    }
 
     if ((order.servedQuantity || 0) < (order.quantity || 0)) continue;
     touchedReservationIds.add(String(order.reservation));

@@ -2,6 +2,8 @@
 // Gère la création, la lecture, la mise à jour et la suppression (CRUD) des menus quotidiens (déjeuner/dîner).
 
 const Menu = require("../models/Menu");
+const Student = require("../models/Student");
+const StudentNotification = require("../models/StudentNotification");
 
 // Normalise la date reçue en entrée pour assurer un format Date JS valide (UTC)
 function normalizeMenuDateInput(value) {
@@ -37,6 +39,30 @@ module.exports.createMenu = async (req, res) => {
     if (body.date) body.date = normalizeMenuDateInput(body.date);
     const menu = new Menu(body);
     await menu.save();
+
+    // 🔔 Notification globale : Nouveau menu publié
+    try {
+      const students = await Student.find({ status: "ACCEPTED" }).select("_id");
+      const dateStr = menu.date.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+      const notifications = students.map((student) => ({
+        student: student._id,
+        key: `new_menu_${menu._id}_${student._id}`,
+        type: "menu",
+        title: "Nouveau menu disponible ! 🍴",
+        body: `Le menu du ${dateStr} (${menu.repas}) est maintenant en ligne.`,
+        icon: "restaurant-outline",
+        bg: "#F8F9FA",
+        tint: "#212529",
+        actionRoute: "StudentHome",
+      }));
+      // Insertion en masse pour être plus performant
+      if (notifications.length > 0) {
+        await StudentNotification.insertMany(notifications, { ordered: false }).catch(() => {});
+      }
+    } catch (e) {
+      console.error("Erreur notification nouveau menu :", e.message);
+    }
+
     res.status(201).json(menu);
   } catch (error) {
     res.status(400).json({ message: error.message });

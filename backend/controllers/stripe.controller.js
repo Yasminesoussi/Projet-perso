@@ -4,6 +4,7 @@
 const Pack = require("../models/Pack");
 const PackPurchase = require("../models/PackPurchase");
 const Student = require("../models/Student");
+const StudentNotification = require("../models/StudentNotification");
 const {
   getMerchantDisplayName,
   getStripeClient,
@@ -123,6 +124,24 @@ async function markPurchaseSucceeded(purchase, paymentIntent) {
     await Student.findByIdAndUpdate(freshlyCredited.student, {
       $inc: { soldeTickets: freshlyCredited.tickets || 0 },
     });
+    
+    // 🔔 Notification pour l'étudiant : achat confirmé !
+    try {
+      await StudentNotification.create({
+        student: freshlyCredited.student,
+        key: `purchase_success_${freshlyCredited._id}`,
+        type: "reservation", // On peut aussi mettre une nouvelle categorie 'payment' si besoin
+        title: "Paiement réussi ! 💳",
+        body: `Votre achat du ${freshlyCredited.pack.nom} est confirmé. ${freshlyCredited.tickets} tickets ont été ajoutés à votre solde.`,
+        icon: "card-outline",
+        bg: "#D1ECF1",
+        tint: "#0C5460",
+        actionRoute: "StudentWallet",
+      });
+    } catch (e) {
+      console.error("Erreur notification achat :", e.message);
+    }
+
     return freshlyCredited;
   }
 
