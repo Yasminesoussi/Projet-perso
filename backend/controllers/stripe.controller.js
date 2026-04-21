@@ -216,6 +216,7 @@ exports.createPackPaymentIntent = async (req, res) => {
       amount: amountMinor,
       currency: getStripeCurrency(),
       customer: student.stripeCustomerId || undefined,
+      payment_method_types: ["card"], // 💳 Force la carte bancaire uniquement
       metadata: {
         studentId: student._id.toString(),
         packId: pack._id.toString(),
@@ -223,7 +224,7 @@ exports.createPackPaymentIntent = async (req, res) => {
       },
     });
 
-    const purchase = await ensurePurchaseFromIntent(paymentIntent);
+    // ❌ Suppression de ensurePurchaseFromIntent ici pour ne pas créer de PENDING en base
 
     res.json({
       clientSecret: paymentIntent.client_secret,
@@ -231,7 +232,7 @@ exports.createPackPaymentIntent = async (req, res) => {
       ephemeralKey: null,
       customer: student.stripeCustomerId || null,
       publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-      purchase: serializePurchase(purchase),
+      purchase: null, // On ne renvoie pas d'achat encore
       merchantDisplayName: getMerchantDisplayName(),
     });
   } catch (error) {
