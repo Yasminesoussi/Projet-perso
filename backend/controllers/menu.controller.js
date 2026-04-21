@@ -1,3 +1,6 @@
+// Contrôleur Menu.
+// Gère la création, la lecture, la mise à jour et la suppression (CRUD) des menus quotidiens (déjeuner/dîner).
+
 const Menu = require("../models/Menu");
 
 function normalizeMenuDateInput(value) {

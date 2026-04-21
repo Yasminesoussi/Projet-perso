@@ -1,3 +1,6 @@
+// Middleware d'authentification Étudiant.
+// Vérifie le token JWT pour sécuriser l'accès aux fonctionnalités réservées aux étudiants (réservations, portefeuille, etc.).
+
 const jwt = require("jsonwebtoken");
 const BlacklistedToken = require("../models/BlacklistedToken");
 

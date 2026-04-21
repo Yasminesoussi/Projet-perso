@@ -1,3 +1,6 @@
+// Contrôleur Avis (Review).
+// Gère les commentaires et les notes laissés par les étudiants sur les plats qu'ils ont consommés.
+
 const Review = require("../models/Review");
 const Student = require("../models/Student");
 

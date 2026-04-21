@@ -1,3 +1,6 @@
+// Contrôleur Plat.
+// Gère le catalogue des plats disponibles (création avec image Cloudinary, modification et liste).
+
 const Plat = require("../models/Plat");
 const Review = require("../models/Review");
 

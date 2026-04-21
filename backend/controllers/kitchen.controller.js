@@ -1,3 +1,6 @@
+// Contrôleur Cuisine.
+// Gère le scan des QR codes (arrivée et retrait), l'affichage du tableau de bord cuisine et la gestion des lots (batches).
+
 const Reservation = require("../models/Reservation");
 const KitchenOrder = require("../models/KitchenOrder");
 const {

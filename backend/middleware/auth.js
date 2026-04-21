@@ -1,4 +1,6 @@
-// backend/middleware/auth.js
+// Middleware d'authentification Admin.
+// Vérifie la validité du token JWT pour les accès protégés de l'administration et s'assure que le token n'est pas blacklisté.
+
 const jwt = require("jsonwebtoken");
 const BlacklistedToken = require("../models/BlacklistedToken");
 

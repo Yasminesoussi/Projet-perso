@@ -1,3 +1,6 @@
+// Contrôleur Pack.
+// Gère les différents types de packs de tickets disponibles à l'achat pour les étudiants.
+
 const Pack = require("../models/Pack");
 
 // ➕ Create a new Pack
