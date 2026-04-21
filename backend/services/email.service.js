@@ -1,7 +1,6 @@
-// Service d'email.
-// Il sert surtout a prevenir l'etudiant quand son compte est accepte ou refuse.
+// Service d'Email.
+// Gère l'envoi d'emails (notifications de compte, confirmations, etc.) via Nodemailer.
 
-// Import de la librairie nodemailer (envoi d'emails)
 const nodemailer = require("nodemailer");
 
 // Récupération des variables d'environnement (config SMTP)

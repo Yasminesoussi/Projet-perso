@@ -3,7 +3,7 @@
 
 const Pack = require("../models/Pack");
 
-// ➕ Create a new Pack
+// 🔹 Crée une nouvelle offre de pack de tickets (ex: Pack 10 repas)
 exports.createPack = async (req, res) => {
     try {
         const pack = new Pack(req.body);
@@ -14,7 +14,7 @@ exports.createPack = async (req, res) => {
     }
 };
 
-// 📄 Get all Packs
+// 🔹 Récupère la liste de tous les packs disponibles pour les étudiants
 exports.getAllPacks = async (req, res) => {
     try {
         const packs = await Pack.find();
@@ -24,7 +24,7 @@ exports.getAllPacks = async (req, res) => {
     }
 };
 
-// ✏️ Update a Pack
+// 🔹 Met à jour les détails d'un pack (prix, nombre de tickets, nom)
 exports.updatePack = async (req, res) => {
     try {
         const { id } = req.params;
@@ -36,7 +36,7 @@ exports.updatePack = async (req, res) => {
     }
 };
 
-// ❌ Delete a Pack
+// 🔹 Supprime définitivement un pack de l'offre
 exports.deletePack = async (req, res) => {
     try {
         const { id } = req.params;

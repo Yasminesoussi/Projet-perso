@@ -3,6 +3,7 @@
 
 const Menu = require("../models/Menu");
 
+// Normalise la date reçue en entrée pour assurer un format Date JS valide (UTC)
 function normalizeMenuDateInput(value) {
   if (!value) return value;
   if (value instanceof Date) return value;
@@ -12,6 +13,7 @@ function normalizeMenuDateInput(value) {
   return new Date(value);
 }
 
+// Génère une plage de temps couvrant toute la journée spécifiée (du début à la fin en UTC)
 function getUTCDateRange(date) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) return null;
   return {
@@ -20,7 +22,7 @@ function getUTCDateRange(date) {
   };
 }
 
-// ➕ Créer un menu
+// 🔹 Crée un nouveau menu quotidien avec ses plats et son créneau horaire
 module.exports.createMenu = async (req, res) => {
   try {
     // Compat: accepter anciens champs { creneau: 'dejeuner|diner', horaire: '12h00 → 13h15' }
@@ -41,7 +43,7 @@ module.exports.createMenu = async (req, res) => {
   }
 };
 
-// 📄 Récupérer tous les menus
+// 🔹 Récupère la liste complète de tous les menus enregistrés en base de données
 module.exports.getAllMenus = async (req, res) => {
   try {
     const menus = await Menu.find().populate("plats");
@@ -51,7 +53,7 @@ module.exports.getAllMenus = async (req, res) => {
   }
 };
 
-// 📄 Récupérer les menus par date et créneau (optionnel)
+// 🔹 Récupère les menus pour une date précise, filtrable par type de repas (déjeuner/dîner)
 module.exports.getMenusByDate = async (req, res) => {
   try {
     const { date, creneau, repas } = req.query;
@@ -80,7 +82,7 @@ module.exports.getMenusByDate = async (req, res) => {
   }
 };
 
-// ✏️ Modifier un menu par ID
+// 🔹 Met à jour les informations d'un menu existant (plats, horaires, capacité)
 module.exports.updateMenu = async (req, res) => {
   try {
     const { id } = req.params;
@@ -101,7 +103,7 @@ module.exports.updateMenu = async (req, res) => {
   }
 };
 
-// ❌ Supprimer un menu par ID
+// 🔹 Supprime définitivement un menu de la base de données
 module.exports.deleteMenu = async (req, res) => {
   try {
     const { id } = req.params;

@@ -1,3 +1,10 @@
+// Service Cuisine.
+// Contient toute la logique métier complexe pour la gestion de la cuisine :
+// - Transformation des réservations en commandes cuisine.
+// - Gestion des lots (batches) de préparation.
+// - Suivi des quantités (en attente, en préparation, prêt, servi).
+// - Calcul des résumés de préparation quotidienne.
+
 const Reservation = require("../models/Reservation");
 const Passage = require("../models/Passage");
 const Student = require("../models/Student");
@@ -5,12 +12,14 @@ const KitchenOrder = require("../models/KitchenOrder");
 const KitchenBatch = require("../models/KitchenBatch");
 const MAX_BATCH_MEALS = 5;
 
+// Génère des identifiants internes pour chaque repas d'une réservation (ex: #ABCDEF-1, #ABCDEF-2)
 function buildInternalOrderIds(reservation) {
   const base = `#${String(reservation._id).slice(-6).toUpperCase()}`;
   const quantity = reservation.groupSize || 1;
   return Array.from({ length: quantity }, (_, index) => `${base}-${index + 1}`);
 }
 
+// Met à jour l'état visuel des places sur le plan de salle
 function setReservationSeatStatus(reservation, nextSeatStatus) {
   reservation.selectedSeats = (reservation.selectedSeats || []).map((seat) => ({
     id: seat?.id,
@@ -21,6 +30,7 @@ function setReservationSeatStatus(reservation, nextSeatStatus) {
   }));
 }
 
+// S'assure que les compteurs de quantité d'une commande sont initialisés et cohérents
 function normalizeKitchenOrderCounters(order) {
   const hasCounters =
     typeof order.pendingQuantity === "number" &&
@@ -43,6 +53,7 @@ function normalizeKitchenOrderCounters(order) {
   return true;
 }
 
+// Synchronise le statut textuel d'une commande en fonction de ses compteurs de quantité
 function syncKitchenOrderStatus(order) {
   if ((order.servedQuantity || 0) >= (order.quantity || 0)) {
     order.status = "SERVED";
@@ -60,6 +71,7 @@ function syncKitchenOrderStatus(order) {
   return order;
 }
 
+// Récupère les prochains IDs de repas à inclure dans un lot de préparation
 function getNextInternalIdsForBatch(order, quantityToTake) {
   const alreadyAllocated =
     (order.preparingQuantity || 0) +
@@ -68,6 +80,7 @@ function getNextInternalIdsForBatch(order, quantityToTake) {
   return (order.internalOrderIds || []).slice(alreadyAllocated, alreadyAllocated + quantityToTake);
 }
 
+// Crée ou récupère une commande cuisine à partir d'une réservation scannée
 async function ensureKitchenOrderFromReservation(reservation) {
   let order = await KitchenOrder.findOne({ reservation: reservation._id });
   if (order) {
@@ -95,11 +108,13 @@ async function ensureKitchenOrderFromReservation(reservation) {
   return order;
 }
 
+// Calcule le numéro du prochain lot à lancer pour un créneau donné
 async function getNextLotNumber({ dateISO, repas, creneau }) {
   const last = await KitchenBatch.findOne({ dateISO, repas, creneau }).sort({ lotNumber: -1 }).lean();
   return (last?.lotNumber || 0) + 1;
 }
 
+// Logique principale pour grouper les commandes en attente dans un nouveau lot de préparation (batch)
 async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_MEALS }) {
   const normalizedMaxMeals = Math.max(1, Math.min(Number(maxMeals) || MAX_BATCH_MEALS, MAX_BATCH_MEALS));
   const activeBatch = await KitchenBatch.findOne({ dateISO, repas, creneau, status: "EN_PREPARATION" });
@@ -196,6 +211,7 @@ async function launchNextBatch({ dateISO, repas, creneau, maxMeals = MAX_BATCH_M
     .populate({ path: "items.order", populate: { path: "reservation", select: "_id" } });
 }
 
+// Marque un lot comme "Prêt" et met à jour les quantités des commandes liées
 async function markBatchReady(batchId) {
   const batch = await KitchenBatch.findById(batchId).populate("items.order");
   if (!batch) {
@@ -229,6 +245,7 @@ async function markBatchReady(batchId) {
     .populate({ path: "items.order", populate: { path: "reservation", select: "_id" } });
 }
 
+// Marque un lot comme "Servi", valide les réservations et crée les enregistrements de passage
 async function markBatchServed(batchId, adminId = null) {
   const batch = await KitchenBatch.findById(batchId).populate("orders").populate("items.order");
   if (!batch) {
@@ -295,6 +312,7 @@ async function markBatchServed(batchId, adminId = null) {
     .populate({ path: "items.order", populate: { path: "reservation", select: "_id" } });
 }
 
+// Construit un résumé des repas prévus (sur place vs emporter) pour une journée
 async function buildPrepSummary(dateISO) {
   const reservations = await Reservation.find({
     dateISO,
@@ -324,6 +342,7 @@ async function buildPrepSummary(dateISO) {
   });
 }
 
+// Récupère toutes les données nécessaires au tableau de bord de la cuisine
 async function getKitchenDashboard({ dateISO, repas, creneau }) {
   const orderFilter = { dateISO };
   const batchFilter = { dateISO };

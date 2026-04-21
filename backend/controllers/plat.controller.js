@@ -4,10 +4,9 @@
 const Plat = require("../models/Plat");
 const Review = require("../models/Review");
 
-
+// 🔹 Crée un nouveau plat dans le catalogue avec une photo (Cloudinary)
 exports.createPlat = async (req, res) => {
   try {
-    console.log("REQ.FILE:", req.file); // debug pour vérifier multer
     const plat = new Plat({
       nom: req.body.nom,
       photo: req.file ? req.file.path : null, // Cloudinary URL
@@ -19,7 +18,7 @@ exports.createPlat = async (req, res) => {
         : [],
       calories: req.body.calories || 0,
       typePlat: req.body.typePlat || "plat",
-      typeAlimentaire: req.body.typeAlimentaire || "equilibre" // ✅ juste la string
+      typeAlimentaire: req.body.typeAlimentaire || "equilibre"
     });
 
     await plat.save();
@@ -30,6 +29,7 @@ exports.createPlat = async (req, res) => {
   }
 };
 
+// 🔹 Récupère la liste de tous les plats enregistrés dans le catalogue
 exports.getAllPlats = async (req, res) => {
   try {
     const plats = await Plat.find();
@@ -39,6 +39,7 @@ exports.getAllPlats = async (req, res) => {
   }
 };
 
+// 🔹 Récupère les détails d'un plat spécifique ainsi que tous ses avis (reviews)
 exports.getPlatById = async (req, res) => {
   try {
     const plat = await Plat.findById(req.params.id);
@@ -57,6 +58,7 @@ exports.getPlatById = async (req, res) => {
   }
 };
 
+// 🔹 Met à jour les informations d'un plat (nom, calories, ingrédients, photo, etc.)
 exports.updatePlat = async (req, res) => {
   try {
     const updateData = {};
@@ -95,9 +97,11 @@ exports.updatePlat = async (req, res) => {
   }
 };
 
+// 🔹 Supprime définitivement un plat du catalogue
 exports.deletePlat = async (req, res) => {
   try {
-    await Plat.findByIdAndDelete(req.params.id);
+    const deleted = await Plat.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Plat non trouvé" });
     res.json({ message: "Plat supprimé avec succès" });
   } catch (err) {
     res.status(500).json({ message: err.message });

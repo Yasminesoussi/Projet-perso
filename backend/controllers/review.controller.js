@@ -3,46 +3,105 @@
 
 const Review = require("../models/Review");
 const Student = require("../models/Student");
+const { escapeRegExp } = require("../utils/string.utils");
 
-exports.listByPlat = async (req, res) => {
+// 🔹 Crée ou met à jour l'avis d'un étudiant sur un plat spécifique
+exports.createReview = async (req, res) => {
   try {
-    const { id } = req.params;
-    const rows = await Review.find({ plat: id }).sort({ createdAt: -1 }).populate("student", "firstName lastName");
-    const out = rows.map(r => ({
+    const { platId, rating, text } = req.body;
+    const studentId = req.studentId;
+
+    if (!platId || !rating) {
+      return res.status(400).json({ message: "Plat et note obligatoires" });
+    }
+
+    const review = await Review.findOneAndUpdate(
+      { plat: platId, student: studentId },
+      { rating, text, createdAt: new Date() },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.status(201).json({ message: "Avis enregistré", review });
+  } catch (error) {
+    res.status(500).json({ message: "Erreur serveur", error });
+  }
+};
+
+// 🔹 Liste tous les avis pour un plat donné (visible par tous les étudiants)
+exports.getReviewsByPlat = async (req, res) => {
+  try {
+    const { platId } = req.params;
+    const reviews = await Review.find({ plat: platId })
+      .populate("student", "firstName lastName")
+      .sort({ createdAt: -1 });
+
+    const out = reviews.map(r => ({
       id: r._id,
       rating: r.rating,
       text: r.text || "",
       date: r.createdAt,
       author: { fullName: `${r.student?.firstName || ""} ${r.student?.lastName || ""}`.trim() }
     }));
+
     res.json({ reviews: out });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error });
   }
 };
 
-exports.createForPlat = async (req, res) => {
+// 🔹 Liste tous les avis de la plateforme avec recherche et pagination (Admin)
+exports.listReviews = async (req, res) => {
+  try {
+    const { q, rating, platId, page = 1, limit = 25, sort = "-createdAt" } = req.query || {};
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 25));
+
+    const match = {};
+    if (rating) match.rating = Number(rating);
+    if (platId) match.plat = platId;
+
+    const regex = q && String(q).trim() ? new RegExp(escapeRegExp(String(q).trim()), "i") : null;
+
+    const commonPipeline = [
+      { $match: match },
+      { $lookup: { from: "plats", localField: "plat", foreignField: "_id", as: "plat" } },
+      { $unwind: "$plat" },
+      { $lookup: { from: "students", localField: "student", foreignField: "_id", as: "student" } },
+      { $unwind: "$student" },
+    ];
+
+    if (regex) {
+      commonPipeline.push({
+        $match: {
+          $or: [
+            { "student.firstName": { $regex: regex } },
+            { "student.lastName": { $regex: regex } },
+            { "plat.nom": { $regex: regex } },
+          ],
+        },
+      });
+    }
+
+    const reviews = await Review.aggregate([
+      ...commonPipeline,
+      { $sort: { createdAt: sort.startsWith("-") ? -1 : 1 } },
+      { $skip: (pageNum - 1) * limitNum },
+      { $limit: limitNum },
+    ]);
+
+    res.json({ reviews, page: pageNum, total: reviews.length });
+  } catch (error) {
+    res.status(500).json({ message: "Erreur serveur", error });
+  }
+};
+
+// 🔹 Supprime définitivement un avis (Admin)
+exports.deleteReview = async (req, res) => {
   try {
     const { id } = req.params;
-    const { rating, text } = req.body || {};
-    if (!rating || Number(rating) < 1 || Number(rating) > 5) {
-      return res.status(400).json({ message: "Note invalide" });
-    }
-    const student = await Student.findById(req.studentId);
-    if (!student) return res.status(404).json({ message: "Étudiant introuvable" });
-    const review = await Review.create({
-      plat: id,
-      student: student._id,
-      rating: Number(rating),
-      text: String(text || "")
-    });
-    res.status(201).json({
-      id: review._id,
-      rating: review.rating,
-      text: review.text,
-      date: review.createdAt,
-      author: { fullName: `${student.firstName} ${student.lastName}` }
-    });
+    const deleted = await Review.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ message: "Feedback introuvable" });
+    res.json({ message: "Feedback supprimé" });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error });
   }

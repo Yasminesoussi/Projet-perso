@@ -12,11 +12,13 @@ const {
   getKitchenDashboard,
 } = require("../services/kitchen.service");
 
+// Décode le payload du QR Code de réservation (Base64URL)
 function decodeReservationQR(qrPayload) {
   const json = Buffer.from(qrPayload, "base64url").toString("utf8");
   return JSON.parse(json);
 }
 
+// Analyse les heures de début et fin d'un créneau (ex: "10:30 → 12:00")
 function parseStartEnd(dateISO, creneau) {
   const times = String(creneau).split(/→|-/).map((s) => s.trim());
   const toHM = (t) => {
@@ -39,6 +41,7 @@ function parseStartEnd(dateISO, creneau) {
   return { start, end };
 }
 
+// Trouve la réservation correspondante à partir des données d'un QR Code
 async function findReservationFromQR(qrPayload) {
   const decoded = decodeReservationQR(qrPayload);
   if (decoded?.type !== "RESERVATION") {
@@ -64,6 +67,7 @@ async function findReservationFromQR(qrPayload) {
   return reservation;
 }
 
+// 🔹 Récupère l'état actuel de la cuisine (commandes en attente, lots en cours, etc.)
 exports.getDashboard = async (req, res) => {
   try {
     const { dateISO, repas, creneau } = req.query || {};
@@ -81,6 +85,7 @@ exports.getDashboard = async (req, res) => {
   }
 };
 
+// 🔹 Enregistre l'arrivée d'un étudiant à la cantine (via scan QR) et crée la commande cuisine
 exports.scanArrival = async (req, res) => {
   try {
     const { qrPayload } = req.body || {};
@@ -108,6 +113,7 @@ exports.scanArrival = async (req, res) => {
   }
 };
 
+// 🔹 Lance la préparation d'un nouveau lot (batch) de repas
 exports.launchBatch = async (req, res) => {
   try {
     const { dateISO, repas, creneau, maxMeals } = req.body || {};
@@ -128,6 +134,7 @@ exports.launchBatch = async (req, res) => {
   }
 };
 
+// 🔹 Marque un lot de repas comme étant "Prêt" (la cuisine a fini la cuisson)
 exports.markBatchReady = async (req, res) => {
   try {
     const batch = await markBatchReady(req.params.id);
@@ -137,6 +144,7 @@ exports.markBatchReady = async (req, res) => {
   }
 };
 
+// 🔹 Marque un lot comme étant "Servi" (tous les repas ont été distribués)
 exports.markBatchServed = async (req, res) => {
   try {
     const batch = await markBatchServed(req.params.id, req.adminId || null);
@@ -146,6 +154,7 @@ exports.markBatchServed = async (req, res) => {
   }
 };
 
+// 🔹 Valide le retrait d'un repas par l'étudiant (via scan QR final)
 exports.scanPickup = async (req, res) => {
   try {
     const { qrPayload } = req.body || {};

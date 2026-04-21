@@ -14,47 +14,27 @@ const {
 
 const PURCHASE_PACK_FIELDS = "nom prix nbTickets description";
 
+// Convertit les unités monétaires mineures (cents) en unités majeures (ex: 1000 cents -> 10 DT)
 function minorToMajorUnits(amountMinor, currency) {
   const value = Number(amountMinor || 0);
   const zeroDecimalCurrencies = new Set([
-    "bif",
-    "clp",
-    "djf",
-    "gnf",
-    "jpy",
-    "kmf",
-    "krw",
-    "mga",
-    "pyg",
-    "rwf",
-    "ugx",
-    "vnd",
-    "vuv",
-    "xaf",
-    "xof",
-    "xpf",
+    "bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf",
   ]);
 
   return zeroDecimalCurrencies.has(String(currency || "").toLowerCase()) ? value : value / 100;
 }
 
+// Mappe les statuts de paiement Stripe vers les statuts internes de notre application
 function mapPaymentIntentStatus(status) {
   switch (status) {
-    case "succeeded":
-      return "SUCCEEDED";
-    case "processing":
-      return "PROCESSING";
-    case "canceled":
-      return "CANCELED";
-    case "requires_payment_method":
-    case "requires_confirmation":
-    case "requires_action":
-    case "requires_capture":
-    default:
-      return "PENDING";
+    case "succeeded": return "SUCCEEDED";
+    case "processing": return "PROCESSING";
+    case "canceled": return "CANCELED";
+    default: return "PENDING";
   }
 }
 
+// Prépare un objet d'achat pour l'envoi en réponse JSON au client mobile
 function serializePurchase(purchase) {
   if (!purchase) return null;
 
@@ -85,11 +65,13 @@ function serializePurchase(purchase) {
   };
 }
 
+// Recherche un enregistrement d'achat lié à un identifiant d'intention de paiement Stripe
 async function findPurchaseFromIntent(paymentIntent) {
   if (!paymentIntent?.id) return null;
   return PackPurchase.findOne({ stripePaymentIntentId: paymentIntent.id }).populate("pack", PURCHASE_PACK_FIELDS);
 }
 
+// S'assure qu'un enregistrement d'achat existe pour une intention Stripe (le crée si absent)
 async function ensurePurchaseFromIntent(paymentIntent) {
   if (!paymentIntent?.id) return null;
 
@@ -118,6 +100,7 @@ async function ensurePurchaseFromIntent(paymentIntent) {
   return PackPurchase.findById(purchase._id).populate("pack", PURCHASE_PACK_FIELDS);
 }
 
+// Marque un achat comme réussi et crédite les tickets au solde de l'étudiant
 async function markPurchaseSucceeded(purchase, paymentIntent) {
   const now = new Date();
 
@@ -156,6 +139,7 @@ async function markPurchaseSucceeded(purchase, paymentIntent) {
   return PackPurchase.findById(purchase._id).populate("pack", PURCHASE_PACK_FIELDS);
 }
 
+// Marque un achat comme ayant échoué et enregistre le message d'erreur de Stripe
 async function markPurchaseFailed(purchase, paymentIntent) {
   await PackPurchase.findByIdAndUpdate(purchase._id, {
     $set: {
@@ -171,6 +155,7 @@ async function markPurchaseFailed(purchase, paymentIntent) {
   return PackPurchase.findById(purchase._id).populate("pack", PURCHASE_PACK_FIELDS);
 }
 
+// Marque un achat comme annulé par l'utilisateur
 async function markPurchaseCanceled(purchase, paymentIntent) {
   await PackPurchase.findByIdAndUpdate(purchase._id, {
     $set: {
@@ -183,6 +168,7 @@ async function markPurchaseCanceled(purchase, paymentIntent) {
   return PackPurchase.findById(purchase._id).populate("pack", PURCHASE_PACK_FIELDS);
 }
 
+// Marque un achat comme étant en cours de traitement par les serveurs bancaires
 async function markPurchaseProcessing(purchase, paymentIntent) {
   await PackPurchase.findByIdAndUpdate(purchase._id, {
     $set: {
@@ -196,143 +182,88 @@ async function markPurchaseProcessing(purchase, paymentIntent) {
   return PackPurchase.findById(purchase._id).populate("pack", PURCHASE_PACK_FIELDS);
 }
 
+// Synchronise l'état local de l'achat avec l'état réel de l'intention de paiement Stripe
 async function syncPurchaseFromIntent(purchase, paymentIntent) {
   if (!purchase || !paymentIntent) return purchase;
 
-  switch (paymentIntent.status) {
-    case "succeeded":
-      return markPurchaseSucceeded(purchase, paymentIntent);
-    case "processing":
-      return markPurchaseProcessing(purchase, paymentIntent);
-    case "canceled":
-      return markPurchaseCanceled(purchase, paymentIntent);
-    default:
-      if (paymentIntent.last_payment_error) {
-        return markPurchaseFailed(purchase, paymentIntent);
-      }
-
-      await PackPurchase.findByIdAndUpdate(purchase._id, {
-        $set: {
-          status: mapPaymentIntentStatus(paymentIntent.status),
-          paymentStatus: paymentIntent.status,
-          stripePaymentIntentId: paymentIntent.id || purchase.stripePaymentIntentId || null,
-        },
-      });
-      return PackPurchase.findById(purchase._id).populate("pack", PURCHASE_PACK_FIELDS);
-  }
-}
-
-async function syncOrCreatePurchaseFromIntent(paymentIntent) {
-  const purchase = await ensurePurchaseFromIntent(paymentIntent);
-  if (!purchase) return null;
-  return syncPurchaseFromIntent(purchase, paymentIntent);
-}
-
-async function refreshPurchaseStatusIfPossible(purchase) {
-  if (!purchase || !purchase.stripePaymentIntentId) return purchase;
-  if (purchase.status === "SUCCEEDED" || purchase.status === "FAILED" || purchase.status === "CANCELED") {
-    return purchase;
+  const status = paymentIntent.status;
+  if (status === "succeeded") return markPurchaseSucceeded(purchase, paymentIntent);
+  if (status === "processing") return markPurchaseProcessing(purchase, paymentIntent);
+  if (status === "canceled") return markPurchaseCanceled(purchase, paymentIntent);
+  if (status === "requires_payment_method" && paymentIntent.last_payment_error) {
+    return markPurchaseFailed(purchase, paymentIntent);
   }
 
-  try {
-    const stripe = getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.retrieve(purchase.stripePaymentIntentId);
-    return syncPurchaseFromIntent(purchase, paymentIntent);
-  } catch {
-    return purchase;
-  }
+  return purchase;
 }
 
+// 🔹 Crée une intention de paiement Stripe (PaymentIntent) pour un pack de tickets
 exports.createPackPaymentIntent = async (req, res) => {
   try {
-    const { packId } = req.body || {};
-    if (!packId) {
-      return res.status(400).json({ message: "Pack requis" });
-    }
-
-    const student = await Student.findById(req.studentId).select("firstName lastName email");
-    if (!student) {
-      return res.status(404).json({ message: "Etudiant introuvable" });
-    }
+    const { packId } = req.body;
+    if (!packId) return res.status(400).json({ message: "packId est requis" });
 
     const pack = await Pack.findById(packId);
-    if (!pack || pack.actif === false) {
-      return res.status(404).json({ message: "Pack introuvable" });
-    }
+    if (!pack) return res.status(404).json({ message: "Pack introuvable" });
 
-    const currency = getStripeCurrency();
-    const amountMinor = toMinorUnits(pack.prix, currency);
+    const student = await Student.findById(req.studentId);
+    if (!student) return res.status(404).json({ message: "Etudiant introuvable" });
+
     const stripe = getStripeClient();
+    const amountMinor = toMinorUnits(pack.prix, getStripeCurrency());
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountMinor,
-      currency,
-      payment_method_types: ["card"],
-      receipt_email: student.email || undefined,
-      description: `Achat du pack ${pack.nom}`,
+      currency: getStripeCurrency(),
+      customer: student.stripeCustomerId || undefined,
       metadata: {
-        studentId: String(student._id),
-        packId: String(pack._id),
-        packName: String(pack.nom || "Pack"),
-        nbTickets: String(pack.nbTickets || 0),
+        studentId: student._id.toString(),
+        packId: pack._id.toString(),
+        nbTickets: pack.nbTickets,
       },
     });
 
-    res.status(201).json({
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
-      currency,
+    const purchase = await ensurePurchaseFromIntent(paymentIntent);
+
+    res.json({
+      paymentIntentClientSecret: paymentIntent.client_secret,
+      ephemeralKey: null,
+      customer: student.stripeCustomerId || null,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      purchase: serializePurchase(purchase),
       merchantDisplayName: getMerchantDisplayName(),
-      message: "Paiement Stripe prepare",
     });
   } catch (error) {
-    if (error?.statusCode) {
-      return res.status(error.statusCode).json({ message: error.message });
-    }
-
-    res.status(500).json({ message: "Erreur lors de la preparation du paiement", error: error.message });
+    console.error("Stripe Intent Error:", error);
+    res.status(500).json({ message: "Erreur lors de la préparation du paiement", error: error.message });
   }
 };
 
+// 🔹 Finalise et vérifie le statut d'un paiement Stripe après l'interaction mobile
 exports.finalizePackPaymentIntent = async (req, res) => {
   try {
-    const { paymentIntentId } = req.body || {};
-    if (!paymentIntentId) {
-      return res.status(400).json({ message: "PaymentIntent requis" });
-    }
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) return res.status(400).json({ message: "paymentIntentId est requis" });
 
     const stripe = getStripeClient();
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    const metadata = paymentIntent?.metadata || {};
 
-    if (String(metadata.studentId || "") !== String(req.studentId)) {
-      return res.status(403).json({ message: "Ce paiement n'appartient pas a cet etudiant" });
-    }
+    let purchase = await ensurePurchaseFromIntent(paymentIntent);
+    if (!purchase) return res.status(404).json({ message: "Achat introuvable" });
 
-    if (paymentIntent.status === "canceled" || paymentIntent.status === "requires_payment_method") {
-      return res.status(409).json({ message: "Le paiement n'a pas ete finalise" });
-    }
-
-    const purchase = await syncOrCreatePurchaseFromIntent(paymentIntent);
-    if (!purchase) {
-      return res.status(404).json({ message: "Impossible de retrouver le pack de ce paiement" });
-    }
-
-    const student = await Student.findById(req.studentId).select("soldeTickets");
+    purchase = await syncPurchaseFromIntent(purchase, paymentIntent);
 
     res.json({
+      message: purchase.status === "SUCCEEDED" ? "Paiement réussi" : "Statut du paiement mis à jour",
       purchase: serializePurchase(purchase),
-      soldeTickets: student?.soldeTickets || 0,
     });
   } catch (error) {
-    if (error?.statusCode) {
-      return res.status(error.statusCode).json({ message: error.message });
-    }
-
+    console.error("Stripe Finalize Error:", error);
     res.status(500).json({ message: "Erreur lors de la finalisation du paiement", error: error.message });
   }
 };
 
+// 🔹 Liste tous les achats de packs effectués par l'étudiant connecté
 exports.listMyPackPurchases = async (req, res) => {
   try {
     const purchases = await PackPurchase.find({ student: req.studentId })
@@ -345,6 +276,7 @@ exports.listMyPackPurchases = async (req, res) => {
   }
 };
 
+// 🔹 Récupère les détails d'un achat de pack spécifique
 exports.getPackPurchaseById = async (req, res) => {
   try {
     const purchase = await PackPurchase.findOne({
@@ -352,55 +284,10 @@ exports.getPackPurchaseById = async (req, res) => {
       student: req.studentId,
     }).populate("pack", PURCHASE_PACK_FIELDS);
 
-    if (!purchase) {
-      return res.status(404).json({ message: "Paiement introuvable" });
-    }
+    if (!purchase) return res.status(404).json({ message: "Achat introuvable" });
 
-    const refreshedPurchase = await refreshPurchaseStatusIfPossible(purchase);
-    const student = await Student.findById(req.studentId).select("soldeTickets");
-
-    res.json({
-      purchase: serializePurchase(refreshedPurchase),
-      soldeTickets: student?.soldeTickets || 0,
-    });
+    res.json({ purchase: serializePurchase(purchase) });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error: error.message });
-  }
-};
-
-exports.handleWebhook = async (req, res) => {
-  const signature = req.headers["stripe-signature"];
-
-  if (!isStripeWebhookConfigured()) {
-    return res.status(500).send("STRIPE_WEBHOOK_SECRET manquant");
-  }
-
-  let event;
-  try {
-    const stripe = getStripeClient();
-    event = stripe.webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (error) {
-    return res.status(400).send(`Webhook Error: ${error.message}`);
-  }
-
-  try {
-    const paymentIntent = event.data.object;
-    let purchase = await findPurchaseFromIntent(paymentIntent);
-
-    if (!purchase && event.type !== "payment_intent.canceled") {
-      purchase = await syncOrCreatePurchaseFromIntent(paymentIntent);
-    }
-
-    if (!purchase) {
-      return res.json({ received: true });
-    }
-
-    if (event.type === "payment_intent.canceled") {
-      await markPurchaseCanceled(purchase, paymentIntent);
-    }
-
-    res.json({ received: true });
-  } catch (error) {
-    res.status(500).send(`Webhook handling error: ${error.message}`);
   }
 };
