@@ -749,7 +749,7 @@ exports.listReservationFeedbacks = async (req, res) => {
     const [feedbacks, stats] = await Promise.all([
       ServiceFeedback.find(match)
         .populate("student", "firstName lastName email studentNumber")
-        .populate("reservation", "dateISO repas")
+        .populate("reservation", "dateISO repas creneau typeRepas status")
         .sort({ createdAt: -1 }),
       ServiceFeedback.aggregate([
         { $match: match },
