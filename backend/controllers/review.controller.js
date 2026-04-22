@@ -82,14 +82,46 @@ exports.listReviews = async (req, res) => {
       });
     }
 
-    const reviews = await Review.aggregate([
-      ...commonPipeline,
-      { $sort: { createdAt: sort.startsWith("-") ? -1 : 1 } },
-      { $skip: (pageNum - 1) * limitNum },
-      { $limit: limitNum },
+    const [results, stats] = await Promise.all([
+      Review.aggregate([
+        ...commonPipeline,
+        { $sort: { createdAt: sort.startsWith("-") ? -1 : 1 } },
+        { $skip: (pageNum - 1) * limitNum },
+        { $limit: limitNum },
+      ]),
+      Review.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            avgRating: { $avg: "$rating" },
+            count1: { $sum: { $cond: [{ $eq: ["$rating", 1] }, 1, 0] } },
+            count2: { $sum: { $cond: [{ $eq: ["$rating", 2] }, 1, 0] } },
+            count3: { $sum: { $cond: [{ $eq: ["$rating", 3] }, 1, 0] } },
+            count4: { $sum: { $cond: [{ $eq: ["$rating", 4] }, 1, 0] } },
+            count5: { $sum: { $cond: [{ $eq: ["$rating", 5] }, 1, 0] } },
+          },
+        },
+      ]),
     ]);
 
-    res.json({ reviews, page: pageNum, total: reviews.length });
+    const statData = stats[0] || { total: 0, avgRating: 0 };
+    const statsByRating = {
+      1: statData.count1 || 0,
+      2: statData.count2 || 0,
+      3: statData.count3 || 0,
+      4: statData.count4 || 0,
+      5: statData.count5 || 0,
+    };
+
+    res.json({
+      reviews: results,
+      page: pageNum,
+      total: statData.total,
+      avgRating: statData.avgRating,
+      statsByRating,
+    });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error });
   }

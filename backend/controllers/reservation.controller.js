@@ -546,6 +546,7 @@ exports.cancelReservation = async (req, res) => {
 
 // Valide le passage d'un étudiant en scannant son QR Code de réservation
 exports.consumeByQR = async (req, res) => {
+  //L'existence
   try {
     const { qrPayload } = req.body || {};
     if (!qrPayload) return res.status(400).json({ message: "QR manquant" });
@@ -565,9 +566,11 @@ exports.consumeByQR = async (req, res) => {
     const reservation = await Reservation.findOne({ student: studentId, dateISO, repas, creneau });
     if (!reservation) return res.status(404).json({ message: "Réservation introuvable" });
 
+    //Le statut
     if (reservation.status === "CANCELLED") return res.status(400).json({ message: "Réservation annulée" });
     if (reservation.status === "CONSUMED") return res.status(400).json({ message: "Déjà consommée" });
 
+    //L'heure (Le timing) :
     const { start } = parseStartEnd(reservation.dateISO, reservation.creneau);
     if (start) {
       const now = new Date();
@@ -579,6 +582,7 @@ exports.consumeByQR = async (req, res) => {
     setReservationSeatStatus(reservation, "occupied");
     await reservation.save();
 
+    //L'identité
     const student = await Student.findById(reservation.student);
     if (student) {
       student.blockedTickets = Math.max(0, (student.blockedTickets || 0) - (reservation.groupSize || 1));
@@ -605,9 +609,9 @@ exports.consumeByQR = async (req, res) => {
 // Liste toutes les réservations (utilisé par le tableau de bord admin)
 exports.listReservations = async (req, res) => {
   try {
-    const { q, dateISO, dateFrom, dateTo, repas, status, typeRepas, page = 1, limit = 25, sort = "-createdAt" } = req.query || {};
+    const { q, dateISO, dateFrom, dateTo, repas, status, typeRepas, page = 1, limit = 100, sort = "-createdAt" } = req.query || {};
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 25));
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
 
     const match = {};
     if (dateISO) match.dateISO = String(dateISO);
@@ -616,9 +620,9 @@ exports.listReservations = async (req, res) => {
       if (dateFrom) match.dateISO.$gte = String(dateFrom);
       if (dateTo) match.dateISO.$lte = String(dateTo);
     }
-    if (repas) match.repas = String(repas);
-    if (status) match.status = String(status);
-    if (typeRepas) match.typeRepas = String(typeRepas);
+    if (repas && repas !== "ALL") match.repas = String(repas);
+    if (status && status !== "ALL") match.status = String(status);
+    if (typeRepas && typeRepas !== "ALL") match.typeRepas = String(typeRepas);
 
     const studentMatch = q ? {
       $or: [
@@ -629,29 +633,56 @@ exports.listReservations = async (req, res) => {
       ],
     } : null;
 
-    const itemsRaw = await Reservation.find(match)
-      .populate({ path: "student", select: "firstName lastName email studentNumber", match: studentMatch || undefined })
-      .sort(sort)
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
-      .lean();
+    const [itemsRaw, totalCount, statusStats] = await Promise.all([
+      Reservation.find(match)
+        .populate({ path: "student", select: "firstName lastName email studentNumber", match: studentMatch || undefined })
+        .sort(sort)
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean(),
+      Reservation.countDocuments(match),
+      Reservation.aggregate([
+        { $match: match },
+        { $group: { _id: "$status", count: { $sum: 1 } } }
+      ])
+    ]);
 
-    const items = itemsRaw.filter((r) => !!r.student);
-    res.json({ reservations: items, page: pageNum, total: items.length });
+    // Filtrer les réservations dont l'étudiant ne correspond pas à la recherche 'q'
+    const items = itemsRaw.filter((r) => !studentMatch || !!r.student);
+    
+    const stats = {};
+    statusStats.forEach(s => {
+      stats[s._id] = s.count;
+    });
+
+    res.json({ 
+      reservations: items, 
+      page: pageNum, 
+      total: totalCount,
+      stats
+    });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error });
   }
 };
 
-// Permet à l'admin de modifier manuellement le statut d'une réservation (ex: marquer comme consommé sans scan)
+// Permet à l'admin de forcer le changement de statut d'une réservation (ex: annuler manuellement)
 exports.updateReservationStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    const validStatuses = ["ACTIVE", "CONSUMED", "CANCELLED", "EXPIRED"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Statut invalide" });
+    }
+
     const reservation = await Reservation.findById(id);
     if (!reservation) return res.status(404).json({ message: "Réservation introuvable" });
 
+    const oldStatus = reservation.status;
     reservation.status = status;
+
     if (status === "CONSUMED") {
       setReservationSeatStatus(reservation, "occupied");
       await Passage.create({
@@ -666,7 +697,29 @@ exports.updateReservationStatus = async (req, res) => {
     } else {
       setReservationSeatStatus(reservation, "available");
     }
+
     await reservation.save();
+
+    // Si on annule une réservation ACTIVE, on rend les tickets à l'étudiant
+    if (oldStatus === "ACTIVE" && status === "CANCELLED") {
+      const student = await Student.findById(reservation.student);
+      if (student) {
+        const count = reservation.groupSize || 1;
+        student.blockedTickets = Math.max(0, (student.blockedTickets || 0) - count);
+        await student.save();
+      }
+    }
+
+    // Si on réactive une réservation ANNULEE, on re-bloque les tickets
+    if (oldStatus === "CANCELLED" && status === "ACTIVE") {
+       const student = await Student.findById(reservation.student);
+       if (student) {
+         const count = reservation.groupSize || 1;
+         student.blockedTickets = (student.blockedTickets || 0) + count;
+         await student.save();
+       }
+    }
+
     res.json({ message: "Statut mis à jour", reservation });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error });
@@ -676,8 +729,53 @@ exports.updateReservationStatus = async (req, res) => {
 // Liste les feedbacks de service reçus (pour analyse admin)
 exports.listReservationFeedbacks = async (req, res) => {
   try {
-    const feedbacks = await ServiceFeedback.find().populate("student", "firstName lastName").populate("reservation", "dateISO repas");
-    res.json({ feedbacks });
+    const { q } = req.query || {};
+    
+    const match = {};
+    if (q) {
+      const studentMatch = {
+        $or: [
+          { firstName: { $regex: new RegExp(escapeRegExp(q), "i") } },
+          { lastName: { $regex: new RegExp(escapeRegExp(q), "i") } },
+          { email: { $regex: new RegExp(escapeRegExp(q), "i") } },
+          { studentNumber: { $regex: new RegExp(escapeRegExp(q), "i") } },
+        ],
+      };
+      // On cherche les étudiants correspondants d'abord
+      const students = await Student.find(studentMatch).select("_id");
+      match.student = { $in: students.map(s => s._id) };
+    }
+
+    const [feedbacks, stats] = await Promise.all([
+      ServiceFeedback.find(match)
+        .populate("student", "firstName lastName email studentNumber")
+        .populate("reservation", "dateISO repas")
+        .sort({ createdAt: -1 }),
+      ServiceFeedback.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            avgService: { $avg: "$serviceRating" },
+            avgMeal: { $avg: "$mealRating" },
+            avgAmbiance: { $avg: "$ambianceRating" },
+          },
+        },
+      ]),
+    ]);
+
+    const statData = stats[0] || { total: 0, avgService: 0, avgMeal: 0, avgAmbiance: 0 };
+
+    res.json({
+      feedbacks,
+      total: statData.total,
+      averages: {
+        service: statData.avgService,
+        meal: statData.avgMeal,
+        ambiance: statData.avgAmbiance,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error });
   }

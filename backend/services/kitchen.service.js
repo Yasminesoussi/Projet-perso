@@ -368,11 +368,13 @@ async function markBatchServed(batchId, adminId = null) {
 
     const student = await Student.findById(reservation.student);
     if (student) {
+      // 💡 Soustraction réelle des tickets du solde de l'étudiant
       student.blockedTickets = Math.max(0, (student.blockedTickets || 0) - (reservation.groupSize || 1));
       student.soldeTickets = Math.max(0, (student.soldeTickets || 0) - (reservation.groupSize || 1));
       await student.save();
     }
 
+    // 💡 Création de la preuve de passage (historique) liée à la réservation
     await Passage.create({
       reservation: reservation._id,
       student: reservation.student,

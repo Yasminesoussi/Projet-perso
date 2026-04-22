@@ -11,22 +11,28 @@ const Passage = require("../models/Passage");
 const PackPurchase = require("../models/PackPurchase");
 
 // 🔹 Connecte un administrateur et génère un token JWT
+// Cette fonction vérifie les identifiants de l'admin (email/password) et crée un "badge" (token JWT) 
+// qui lui permet d'accéder aux fonctionnalités réservées (ex: valider des étudiants).
 exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // Vérification de l'état de la base de données Atlas
     if (mongoose.connection.readyState !== 1) {
       return res.status(503).json({
         message: "MongoDB non connecté (vérifie la connexion Atlas/DNS) — réessaie dans quelques secondes",
       });
     }
 
+    // Recherche de l'admin par son email
     const admin = await Admin.findOne({ email });
     if (!admin) return res.status(401).json({ message: "Identifiants invalides" });
 
+    // Vérification du mot de passe (haché en base)
     const validPassword = await admin.isValidPassword(password);
     if (!validPassword) return res.status(401).json({ message: "Identifiants invalides" });
 
+    // Création du token sécurisé avec une durée de vie de 1 heure
     const token = jwt.sign(
       { id: admin._id, email: admin.email },
       process.env.JWT_SECRET,
@@ -41,6 +47,7 @@ exports.login = async (req, res) => {
 };
 
 // 🔹 Récupère les informations du profil de l'admin connecté
+// Sert à afficher les détails de l'admin (nom, email) sur son tableau de bord mobile ou web.
 exports.getMe = async (req, res) => {
   try {
     const admin = await Admin.findById(req.adminId).select("-password");
@@ -54,6 +61,7 @@ exports.getMe = async (req, res) => {
 };
 
 // 🔹 Met à jour les informations personnelles de l'admin (nom, email, tel, etc.)
+// Permet à l'administrateur de modifier ses propres coordonnées de contact.
 exports.updateMe = async (req, res) => {
   try {
     const { fullName, email, phone, address, bio } = req.body;
@@ -87,6 +95,7 @@ exports.updateMe = async (req, res) => {
 };
 
 // 🔹 Déconnecte l'admin en ajoutant son token à la liste noire (blacklist)
+// Cette fonction est cruciale pour la sécurité : elle "tue" le token actuel pour qu'il ne soit plus utilisable.
 exports.logout = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -98,6 +107,7 @@ exports.logout = async (req, res) => {
     const decoded = jwt.decode(token);
     if (!decoded) return res.status(400).json({ message: "Token invalide" });
 
+    // Enregistrement du token dans la collection BlacklistedToken jusqu'à sa date d'expiration normale
     const expiresAt = new Date(decoded.exp * 1000);
     await BlacklistedToken.create({ token, expiresAt });
 
@@ -109,6 +119,9 @@ exports.logout = async (req, res) => {
 };
 
 // 🔹 Récupère les statistiques globales (revenus, tickets vendus/utilisés) et l'historique récent pour le dashboard
+// C'est le "cerveau" du tableau de bord admin. Elle agrège les données de 5 tables différentes :
+// 1. PackPurchase (Ventes), 2. Reservation (Consommation), 3. Student (Utilisateurs), 
+// 4. Historique des achats, 5. Historique des passages (scans).
 exports.getTicketsDashboard = async (req, res) => {
   try {
     const [purchaseStatsRows, usedStatsRows, studentsRaw, purchaseRows, passageRows] = await Promise.all([
@@ -181,6 +194,7 @@ exports.getTicketsDashboard = async (req, res) => {
     }));
 
     const usageHistory = passageRows.map((passage) => {
+      // 💡 Le solde retiré correspond au nombre de personnes dans la réservation (groupSize)
       const quantity = Number(passage.reservation?.groupSize || 1);
       return {
         id: `passage-${passage._id}`,
@@ -188,6 +202,7 @@ exports.getTicketsDashboard = async (req, res) => {
         user: `${passage.student?.firstName || ""} ${passage.student?.lastName || ""}`.trim() || "Etudiant",
         detail: `${passage.repas || "Repas"}${passage.creneau ? ` • ${passage.creneau}` : ""}`,
         date: passage.date || passage.createdAt,
+        // 💡 On affiche le signe "-" pour indiquer que les tickets ont été déduits du solde
         amount: `-${quantity} Ticket${quantity > 1 ? "s" : ""}`,
         sortDate: new Date(passage.date || passage.createdAt).getTime(),
       };
