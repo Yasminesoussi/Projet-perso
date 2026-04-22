@@ -26,6 +26,7 @@ router.post("/scan/consume", authMiddleware, reservationController.consumeByQR);
 router.get("/reservations", authMiddleware, reservationController.listReservations);
 router.put("/reservations/:id/status", authMiddleware, reservationController.updateReservationStatus);
 router.get("/reservation-feedbacks", authMiddleware, reservationController.listReservationFeedbacks);
+router.delete("/reservation-feedbacks/:id", authMiddleware, reservationController.deleteReservationFeedback);
 
 // Cuisine
 router.get("/kitchen/dashboard", authMiddleware, kitchenController.getDashboard);

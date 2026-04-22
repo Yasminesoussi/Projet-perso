@@ -781,6 +781,18 @@ exports.listReservationFeedbacks = async (req, res) => {
   }
 };
 
+// 🔹 Supprime définitivement un feedback de réservation (Admin)
+exports.deleteReservationFeedback = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await ServiceFeedback.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ message: "Avis introuvable" });
+    res.json({ message: "Avis supprimé avec succès" });
+  } catch (error) {
+    res.status(500).json({ message: "Erreur serveur", error });
+  }
+};
+
 // Permet à l'étudiant de modifier sa réservation (horaire, places, etc.)
 exports.updateReservation = async (req, res) => {
   try {
