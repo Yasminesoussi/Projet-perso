@@ -8,7 +8,8 @@ const { escapeRegExp } = require("../utils/string.utils");
 // 🔹 Crée ou met à jour l'avis d'un étudiant sur un plat spécifique
 exports.createReview = async (req, res) => {
   try {
-    const { platId, rating, text } = req.body;
+    const { rating, text } = req.body;
+    const platId = req.params.id || req.body.platId; // Accepte l'id dans l'URL ou le corps
     const studentId = req.studentId;
 
     if (!platId || !rating) {
@@ -30,7 +31,7 @@ exports.createReview = async (req, res) => {
 // 🔹 Liste tous les avis pour un plat donné (visible par tous les étudiants)
 exports.getReviewsByPlat = async (req, res) => {
   try {
-    const { platId } = req.params;
+    const platId = req.params.id;
     const reviews = await Review.find({ plat: platId })
       .populate("student", "firstName lastName")
       .sort({ createdAt: -1 });
