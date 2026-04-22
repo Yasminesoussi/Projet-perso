@@ -138,14 +138,15 @@ exports.markNotificationsRead = async (req, res) => {
   }
 };
 
-// 🔹 Archive (cache) une notification
+// 🔹 Supprime définitivement une notification de la BDD
 exports.dismissNotification = async (req, res) => {
   try {
-    await StudentNotification.findOneAndUpdate(
-      { _id: req.params.id, student: req.studentId },
-      { $set: { dismissed: true } }
-    );
-    res.json({ message: "Notification supprimée" });
+    const deleted = await StudentNotification.findOneAndDelete({
+      _id: req.params.id,
+      student: req.studentId,
+    });
+    if (!deleted) return res.status(404).json({ message: "Notification introuvable" });
+    res.json({ message: "Notification supprimée de la BDD" });
   } catch (error) {
     res.status(500).json({ message: "Erreur serveur", error });
   }
